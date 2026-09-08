@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>길드 요리 레시피 탐색기</title>
+<style>
+  body { font-family: 'Noto Sans KR', sans-serif; background: #5c3e21; color: #fff; padding: 20px; max-width: 500px; margin: 0 auto; }
+  .container { background: #6e4a27; border: 4px solid #3d2815; border-radius: 8px; padding: 15px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+  h1 { text-align: center; color: #fff; font-size: 22px; margin-top: 0; text-shadow: 1px 1px 2px #000; }
+
+  /* 재료 그리드 */
+  .grid-header { font-size: 14px; font-weight: bold; margin-bottom: 10px; text-align: center; color: #f1c40f; display: flex; justify-content: space-between; align-items: center; }
+  .ing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 15px; }
+  
+  .ing-card {
+    background: #111;
+    border-radius: 6px;
+    padding: 4px;
+    cursor: pointer;
+    text-align: center;
+    position: relative;
+    box-sizing: border-box;
+    transition: transform 0.1s;
+    user-select: none;
+  }
+  .ing-card:active { transform: scale(0.95); }
+  .ing-card.selected { border-width: 3px !important; box-shadow: 0 0 8px #fff; }
+  
+  .ing-card img { width: 100%; height: auto; display: block; border-radius: 4px; }
+  .ing-card .name { font-size: 11px; margin-top: 3px; color: #ddd; word-break: keep-all; }
+
+  /* 수량 배지 */
+  .count-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #e74c3c;
+    color: #fff;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: 10px;
+    padding: 2px 6px;
+    border: 1px solid #fff;
+    display: none;
+    z-index: 10;
+  }
+
+  /* 게임 테두리 등급 색상 */
+  .border-normal { border: 2px solid #888888; }
+  .border-advanced { border: 2px solid #2ecc71; }
+  .border-hero { border: 2px solid #a832db; }
+  .border-legend { border: 2px solid #e74c3c; }
+  .border-myth { border: 2px solid #2980b9; }
+  .border-immortal { border: 2px solid #f1c40f; box-shadow: 0 0 5px #f1c40f; }
+
+  /* 선택 영역 & 버튼 */
+  .selected-box { background: #3d2815; padding: 12px; border-radius: 6px; font-weight: bold; color: #f1c40f; text-align: center; margin-bottom: 10px; border: 1px solid #7a522a; min-height: 20px; }
+  .action-btn { width: 100%; padding: 14px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; background: #27ae60; color: #fff; box-shadow: 0 4px 0 #1e8449; }
+  .action-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #1e8449; }
+  .clear-btn { background: #c0392b; font-size: 12px; padding: 5px 10px; border: none; color: #fff; border-radius: 4px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 0 #962d22; }
+  .clear-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #962d22; }
+
+  /* 상태 메시지 */
+  .result-msg { margin-top: 10px; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold; display: none; }
+  .msg-fail { background: #c0392b; color: #fff; border: 1px solid #e74c3c; }
+  .msg-success { background: #27ae60; color: #fff; border: 1px solid #2ecc71; }
+
+  /* 팝업 모달 */
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 1000; }
+  .modal-box { background: #4a3018; border: 3px solid #f1c40f; padding: 20px; border-radius: 10px; text-align: center; max-width: 340px; width: 90%; color: #fff; }
+  .modal-btns { display: flex; gap: 10px; margin-top: 12px; }
+  .m-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; }
+  .btn-success { background: #27ae60; color: #fff; }
+  .btn-fail-reg { background: #c0392b; color: #fff; }
+  .btn-cancel { background: #7f8c8d; color: #fff; width: 100%; margin-top: 8px; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; }
+  .btn-copy { background: #3498db; color: #fff; width: 100%; margin-top: 8px; padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>⚔️ 길드 재료 목록</h1>
+
+  <div class="grid-header">
+    <span>재료 선택 (3~5개)</span>
+    <button class="clear-btn" onclick="clearSelected()">🧹 조합 비우기</button>
+  </div>
+
+  <div class="ing-grid" id="ingGrid"></div>
+
+  <div class="selected-box" id="selectedDisplay">선택한 재료: 없음 (0/5)</div>
+  <div id="resultMsg" class="result-msg"></div>
+
+  <button class="action-btn" onclick="checkRecipe()">🍳 요리 결과 확인하기</button>
+</div>
+
+<!-- 1차 결과 확인 모달 -->
+<div class="modal-overlay" id="modalConfirm">
+  <div class="modal-box">
+    <h3>❓ 처음 시도하는 조합입니다!</h3>
+    <p id="modalComboText" style="color: #f1c40f; font-size: 16px; margin: 12px 0; font-weight: bold;"></p>
+    <p style="font-size: 13px; color: #ddd;">인게임에서 요리한 결과를 선택해 주세요.</p>
+    
+    <div class="modal-btns">
+      <button class="m-btn btn-success" onclick="handleResult(true)">🎉 성공</button>
+      <button class="m-btn btn-fail-reg" onclick="handleResult(false)">❌ 실패</button>
+    </div>
+    
+    <button class="btn-cancel" onclick="closeConfirmModal()">↩️ 다른 레시피 입력하기 (취소)</button>
+  </div>
+</div>
+
+<!-- 2차 성공 모달 -->
+<div class="modal-overlay" id="modalSuccess">
+  <div class="modal-box">
+    <h2>🎉 요리 성공!</h2>
+    <p style="font-size: 13px; color: #ccc;">성공한 레시피 조합입니다:</p>
+    <div id="successRecipeText" style="background: #2c1a0e; padding: 10px; border-radius: 6px; color: #2ecc71; font-weight: bold; font-size: 16px; margin: 10px 0; border: 1px dashed #2ecc71;"></div>
+    <button class="btn-copy" onclick="copyRecipe()">📋 조합법 복사하기</button>
+    <p style="font-size: 11px; color: #aaa; margin-top: 8px;">인게임 길드 채팅창에 공유해 주세요!</p>
+    <button class="m-btn" style="background: #7f8c8d; color: #fff; width: 100%; margin-top: 10px;" onclick="closeSuccessModal()">닫기</button>
+  </div>
+</div>
+
+<script>
+  const ingredients = [
+    { name: '밀', grade: 'normal', img: 'images/밀.png' },
+    { name: '고기', grade: 'normal', img: 'images/고기.png' },
+    { name: '양상추', grade: 'normal', img: 'images/양상추.png' },
+    { name: '우유', grade: 'normal', img: 'images/우유.png' },
+    { name: '알', grade: 'advanced', img: 'images/알.png' },
+    { name: '감자', grade: 'hero', img: 'images/감자.png' },
+    { name: '토마토', grade: 'hero', img: 'images/토마토.png' },
+    { name: '새우', grade: 'hero', img: 'images/새우.png' },
+    { name: '쌀', grade: 'hero', img: 'images/쌀.png' },
+    { name: '땅콩', grade: 'hero', img: 'images/땅콩.png' },
+    { name: '옥수수', grade: 'hero', img: 'images/옥수수.png' },
+    { name: '딸기', grade: 'hero', img: 'images/딸기.png' },
+    { name: '사탕수수', grade: 'hero', img: 'images/사탕수수.png' },
+    { name: '', grade: 'none', img: '' },
+    { name: '', grade: 'none', img: '' },
+    { name: '치즈', grade: 'legend', img: 'images/치즈.png' },
+    { name: '고추', grade: 'myth', img: 'images/고추.png' },
+    { name: '생선', grade: 'myth', img: 'images/생선.png' },
+    { name: '바질', grade: 'myth', img: 'images/바질.png' },
+    { name: '코코아', grade: 'myth', img: 'images/코코아.png' },
+    { name: '캐비어', grade: 'immortal', img: 'images/캐비어.png' },
+    { name: '트러플', grade: 'immortal', img: 'images/트러플.png' },
+    { name: '꿀', grade: 'immortal', img: 'images/꿀.png' }
+  ];
+
+  let selectedList = [];
+  let failedCombinations = new Set();
+  let successCombinations = new Set(); // 성공 레시피 저장소
+  let currentComboDisplayStr = "";
+
+  const gridEl = document.getElementById('ingGrid');
+  ingredients.forEach((item, index) => {
+    if(!item.name) {
+      const emptyDiv = document.createElement('div');
+      gridEl.appendChild(emptyDiv);
+      return;
+    }
+    const card = document.createElement('div');
+    card.className = `ing-card border-${item.grade}`;
+    card.id = `ing-${index}`;
+    card.onclick = () => addIngredient(item.name, index);
+    
+    card.innerHTML = `
+      <div class="count-badge" id="badge-${index}">0</div>
+      <img src="${item.img}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/50/222/fff?text=${item.name}'">
+      <div class="name">${item.name}</div>
+    `;
+    gridEl.appendChild(card);
+  });
+
+  function addIngredient(name, index) {
+    if (selectedList.length >= 5) {
+      alert("재료는 최대 5개까지 선택할 수 있습니다.");
+      return;
+    }
+    selectedList.push(name);
+    updateDisplay();
+  }
+
+  function clearSelected() {
+    selectedList = [];
+    document.getElementById('resultMsg').style.display = 'none';
+    updateDisplay();
+  }
+
+  function updateDisplay() {
+    const counts = {};
+    selectedList.forEach(name => {
+      counts[name] = (counts[name] || 0) + 1;
+    });
+
+    ingredients.forEach((item, idx) => {
+      if(!item.name) return;
+      const card = document.getElementById(`ing-${idx}`);
+      const badge = document.getElementById(`badge-${idx}`);
+      const cnt = counts[item.name] || 0;
+
+      if (cnt > 0) {
+        card.classList.add('selected');
+        badge.innerText = `x${cnt}`;
+        badge.style.display = 'block';
+      } else {
+        card.classList.remove('selected');
+        badge.style.display = 'none';
+      }
+    });
+
+    const box = document.getElementById('selectedDisplay');
+    if (selectedList.length === 0) {
+      box.innerText = "선택한 재료: 없음 (0/5)";
+    } else {
+      const summaryStr = Object.entries(counts)
+        .map(([name, count]) => count > 1 ? `${name} x${count}` : name)
+        .join(' + ');
+      box.innerText = `선택: [ ${summaryStr} ] (${selectedList.length}/5)`;
+    }
+  }
+
+  function checkRecipe() {
+    if (selectedList.length < 3) {
+      alert("재료를 최소 3개 이상 선택해 주세요.");
+      return;
+    }
+
+    const comboKey = [...selectedList].sort().join(',');
+    const msgBox = document.getElementById('resultMsg');
+
+    // 1. 이미 실패한 경우
+    if (failedCombinations.has(comboKey)) {
+      msgBox.className = "result-msg msg-fail";
+      msgBox.innerHTML = "❌ 이미 확인된 조합입니다! (실패한 레시피)";
+      msgBox.style.display = 'block';
+    } 
+    // 2. 이미 성공한 경우
+    else if (successCombinations.has(comboKey)) {
+      msgBox.className = "result-msg msg-success";
+      msgBox.innerHTML = "🎉 이미 확인된 조합입니다! (성공한 레시피)";
+      msgBox.style.display = 'block';
+    } 
+    // 3. 미확인 조합인 경우
+    else {
+      msgBox.style.display = 'none';
+      
+      const counts = {};
+      selectedList.forEach(name => counts[name] = (counts[name] || 0) + 1);
+      currentComboDisplayStr = Object.entries(counts)
+        .map(([name, count]) => count > 1 ? `${name} x${count}` : name)
+        .join(' + ');
+
+      document.getElementById('modalComboText').innerText = `[ ${currentComboDisplayStr} ]`;
+      document.getElementById('modalConfirm').style.display = 'flex';
+    }
+  }
+
+  function closeConfirmModal() {
+    document.getElementById('modalConfirm').style.display = 'none';
+  }
+
+  function handleResult(isSuccess) {
+    const comboKey = [...selectedList].sort().join(',');
+    document.getElementById('modalConfirm').style.display = 'none';
+
+    if (isSuccess) {
+      successCombinations.add(comboKey); // 성공 조합 등록
+      document.getElementById('successRecipeText').innerText = `[ ${currentComboDisplayStr} ]`;
+      document.getElementById('modalSuccess').style.display = 'flex';
+    } else {
+      failedCombinations.add(comboKey); // 실패 조합 등록
+      alert("실패 조합으로 등록되어 목록에서 소거됩니다.");
+      clearSelected();
+    }
+  }
+
+  function copyRecipe() {
+    navigator.clipboard.writeText(`[요리 성공 레시피] ${currentComboDisplayStr}`).then(() => {
+      alert("클립보드에 조합법이 복사되었습니다! 길드 채팅에 붙여넣기 해보세요.");
+    });
+  }
+
+  function closeSuccessModal() {
+    document.getElementById('modalSuccess').style.display = 'none';
+    clearSelected();
+  }
+</script>
+</body>
+</html>
