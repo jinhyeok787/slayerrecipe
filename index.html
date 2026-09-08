@@ -194,6 +194,7 @@
     <h3>❓ 처음 시도하는 조합입니다!</h3>
     <p id="modalComboText" style="color: #f1c40f; font-size: 16px; margin: 12px 0; font-weight: bold;"></p>
     <p style="font-size: 13px; color: #ddd;">인게임에서 요리한 결과를 선택해 주세요.</p>
+    
     <div class="modal-btns">
       <button class="m-btn btn-perfect" onclick="handleResult('perfect')">🎉 완벽한 요리</button>
       <button class="m-btn btn-normal-reg" onclick="handleResult('normal')">🍲 평범한 요리</button>
@@ -204,10 +205,10 @@
   </div>
 </div>
 
-<!-- 2차 성공 모달 -->
+<!-- 2차 성공(완벽한 요리) 모달 -->
 <div class="modal-overlay" id="modalSuccess">
   <div class="modal-box">
-    <h2>🎉 요리 성공!</h2>
+    <h2>🎉 완벽한 요리 성공!</h2>
     <p style="font-size: 13px; color: #ccc;">성공한 레시피 조합입니다:</p>
     <div id="successRecipeText" style="background: #2c1a0e; padding: 10px; border-radius: 6px; color: #2ecc71; font-weight: bold; font-size: 16px; margin: 10px 0; border: 1px dashed #2ecc71;"></div>
     <button class="btn-copy" onclick="copyRecipe()">📋 조합법 복사하기</button>
@@ -215,7 +216,7 @@
     <button class="m-btn" style="background: #7f8c8d; color: #fff; width: 100%; margin-top: 10px;" onclick="closeSuccessModal()">닫기</button>
   </div>
 </div>
-
+  
 <script>
   // Firebase 초기화 설정
   const firebaseConfig = {
