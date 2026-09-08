@@ -353,9 +353,9 @@
       return;
     }
 
-    const comboKey = [...selectedList].sort().join('_');
+    const comboKey = [...selectedList].sort().join(',');
     const msgBox = document.getElementById('resultMsg');
-    const existingRecipe = dbRecipes[comboKey];
+    const recipeType = recipeMap.get(comboKey);
 
     if (recipeType === 'fail') {
       msgBox.className = "result-msg msg-fail";
