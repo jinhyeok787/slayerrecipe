@@ -76,6 +76,10 @@
   .btn-cancel { background: #7f8c8d; color: #fff; width: 100%; margin-top: 8px; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; }
   .btn-copy { background: #3498db; color: #fff; width: 100%; margin-top: 8px; padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
 </style>
+
+<!-- Firebase SDK 불러오기 -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -124,6 +128,20 @@
 </div>
 
 <script>
+  // Firebase 초기화 설정
+  const firebaseConfig = {
+    apiKey: "AIzaSyA3jp2x00e5IXfNULVF6laQ1G6akJ-NUJY",
+    authDomain: "slayerrecipe.firebaseapp.com",
+    databaseURL: "https://slayerrecipe-default-rtdb.firebaseio.com",
+    projectId: "slayerrecipe",
+    storageBucket: "slayerrecipe.appspot.com",
+    messagingSenderId: "812845546552",
+    appId: "1:812845546552:web:4947d04ff78531cc89bacd"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+
   const ingredients = [
     { name: '밀', grade: 'normal', img: 'images/밀.png' },
     { name: '고기', grade: 'normal', img: 'images/고기.png' },
@@ -144,19 +162,30 @@
     { name: '고추', grade: 'myth', img: 'images/고추.png' },
     { name: '생선', grade: 'myth', img: 'images/생선.png' },
     { name: '바질', grade: 'myth', img: 'images/바질.png' },
-    { name: '카카오', grade: 'myth', img: 'images/카카오.png' },
+    { name: '코코아', grade: 'myth', img: 'images/코코아.png' },
     { name: '캐비어', grade: 'immortal', img: 'images/캐비어.png' },
     { name: '트러플', grade: 'immortal', img: 'images/트러플.png' },
     { name: '꿀', grade: 'immortal', img: 'images/꿀.png' }
   ];
 
   let selectedList = [];
-  
-  // 브라우저 저장소(localStorage)에서 데이터 가져오기
-  let failedCombinations = new Set(JSON.parse(localStorage.getItem('failedCombinations') || '[]'));
-  let successCombinations = new Set(JSON.parse(localStorage.getItem('successCombinations') || '[]'));
-  
+  let failedCombinations = new Set();
+  let successCombinations = new Set();
   let currentComboDisplayStr = "";
+
+  // Firebase 실시간 데이터 구독 (누군가 데이터를 추가하면 실시간 자동 동기화)
+  database.ref('recipes').on('value', (snapshot) => {
+    const data = snapshot.val();
+    failedCombinations.clear();
+    successCombinations.clear();
+
+    if (data) {
+      Object.values(data).forEach(item => {
+        if (item.type === 'fail') failedCombinations.add(item.key);
+        if (item.type === 'success') successCombinations.add(item.key);
+      });
+    }
+  });
 
   const gridEl = document.getElementById('ingGrid');
   ingredients.forEach((item, index) => {
@@ -172,17 +201,11 @@
     
     card.innerHTML = `
       <div class="count-badge" id="badge-${index}">0</div>
-      <img src="${item.img}" alt="${item.name}" onerror="this.src='https://placehold.co/50/222/fff?text=${item.name}'">
+      <img src="${item.img}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/50/222/fff?text=${item.name}'">
       <div class="name">${item.name}</div>
     `;
     gridEl.appendChild(card);
   });
-
-  // 변경된 레시피 목록을 localStorage에 저장하는 함수
-  function saveData() {
-    localStorage.setItem('failedCombinations', JSON.stringify(Array.from(failedCombinations)));
-    localStorage.setItem('successCombinations', JSON.stringify(Array.from(successCombinations)));
-  }
 
   function addIngredient(name, index) {
     if (selectedList.length >= 5) {
@@ -241,22 +264,18 @@
     const comboKey = [...selectedList].sort().join(',');
     const msgBox = document.getElementById('resultMsg');
 
-    // 1. 이미 실패한 경우
     if (failedCombinations.has(comboKey)) {
       msgBox.className = "result-msg msg-fail";
       msgBox.innerHTML = "❌ 이미 확인된 조합입니다! (실패한 레시피)";
       msgBox.style.display = 'block';
     } 
-    // 2. 이미 성공한 경우
     else if (successCombinations.has(comboKey)) {
       msgBox.className = "result-msg msg-success";
       msgBox.innerHTML = "🎉 이미 확인된 조합입니다! (성공한 레시피)";
       msgBox.style.display = 'block';
     } 
-    // 3. 미확인 조합인 경우
     else {
       msgBox.style.display = 'none';
-      
       const counts = {};
       selectedList.forEach(name => counts[name] = (counts[name] || 0) + 1);
       currentComboDisplayStr = Object.entries(counts)
@@ -276,15 +295,19 @@
     const comboKey = [...selectedList].sort().join(',');
     document.getElementById('modalConfirm').style.display = 'none';
 
+    // Firebase DB에 실시간 저장
+    const safeKey = comboKey.replace(/[\.\#\$\/\[\]]/g, "_");
+    database.ref('recipes/' + safeKey).set({
+      key: comboKey,
+      type: isSuccess ? 'success' : 'fail',
+      createdAt: Date.now()
+    });
+
     if (isSuccess) {
-      successCombinations.add(comboKey); // 성공 조합 등록
-      saveData(); // 데이터 저장
       document.getElementById('successRecipeText').innerText = `[ ${currentComboDisplayStr} ]`;
       document.getElementById('modalSuccess').style.display = 'flex';
     } else {
-      failedCombinations.add(comboKey); // 실패 조합 등록
-      saveData(); // 데이터 저장
-      alert("실패 조합으로 등록되어 목록에서 소거됩니다.");
+      alert("실패 조합으로 등록되어 공유되었습니다.");
       clearSelected();
     }
   }
