@@ -188,8 +188,6 @@
     <button class="action-btn" onclick="checkRecipe()">🍳 요리 결과 확인하기</button>
   </div>
 
-</div>
-
 <!-- 1차 결과 확인 모달 -->
 <div class="modal-overlay" id="modalConfirm">
   <div class="modal-box">
@@ -197,9 +195,12 @@
     <p id="modalComboText" style="color: #f1c40f; font-size: 16px; margin: 12px 0; font-weight: bold;"></p>
     <p style="font-size: 13px; color: #ddd;">인게임에서 요리한 결과를 선택해 주세요.</p>
     <div class="modal-btns">
-      <button class="m-btn btn-success" onclick="handleResult(true)">🎉 성공</button>
-      <button class="m-btn btn-fail-reg" onclick="handleResult(false)">❌ 실패</button>
+      <button class="m-btn btn-perfect" onclick="handleResult('perfect')">🎉 완벽한 요리</button>
+      <button class="m-btn btn-normal-reg" onclick="handleResult('normal')">🍲 평범한 요리</button>
+      <button class="m-btn btn-fail-reg" onclick="handleResult('fail')">❌ 실패</button>
     </div>
+    
+    <button class="btn-cancel" onclick="closeConfirmModal()">↩️ 취소 (다른 레시피 입력)</button>
   </div>
 </div>
 
@@ -216,7 +217,7 @@
 </div>
 
 <script>
-  // Firebase 설정
+  // Firebase 초기화 설정
   const firebaseConfig = {
     apiKey: "AIzaSyA3jp2x00e5IXfNULVF6laQ1G6akJ-NUJY",
     authDomain: "slayerrecipe.firebaseapp.com",
@@ -227,7 +228,7 @@
     appId: "1:812845546552:web:4947d04ff78531cc89bacd",
     measurementId: "G-K4YL4CD2WX"
   };
-
+  
   firebase.initializeApp(firebaseConfig);
   const database = firebase.database();
   const recipesRef = database.ref('recipes');
@@ -252,18 +253,30 @@
     { name: '고추', grade: 'myth', img: 'images/고추.png' },
     { name: '생선', grade: 'myth', img: 'images/생선.png' },
     { name: '바질', grade: 'myth', img: 'images/바질.png' },
-    { name: '코코아', grade: 'myth', img: 'images/코코아.png' },
+    { name: '카카오', grade: 'myth', img: 'images/카카오.png' },
     { name: '캐비어', grade: 'immortal', img: 'images/캐비어.png' },
     { name: '트러플', grade: 'immortal', img: 'images/트러플.png' },
     { name: '꿀', grade: 'immortal', img: 'images/꿀.png' }
   ];
 
   let selectedList = [];
-  let dbRecipes = {}; 
+  let recipeMap = new Map(); // 조합키 -> 타입(perfect, normal, fail) 매핑
   let currentComboDisplayStr = "";
 
-  recipesRef.on('value', (snapshot) => {
-    dbRecipes = snapshot.val() || {};
+  // Firebase 데이터 수신 동기화
+  database.ref('recipes').on('value', (snapshot) => {
+    const data = snapshot.val();
+    recipeMap.clear();
+
+    if (data) {
+      Object.values(data).forEach(item => {
+        // 기존 'success' 데이터는 'perfect'로 호환 처리
+        let resultType = item.type;
+        if (resultType === 'success') resultType = 'perfect';
+        
+        recipeMap.set(item.key, resultType);
+      });
+    }
   });
 
   const gridEl = document.getElementById('ingGrid');
@@ -344,18 +357,23 @@
     const msgBox = document.getElementById('resultMsg');
     const existingRecipe = dbRecipes[comboKey];
 
-    if (existingRecipe) {
-      if (existingRecipe.status === 'fail') {
-        msgBox.className = "result-msg msg-fail";
-        msgBox.innerHTML = "❌ 이미 확인된 조합입니다! (실패한 레시피)";
-      } else if (existingRecipe.status === 'success') {
-        msgBox.className = "result-msg msg-success";
-        msgBox.innerHTML = "🎉 이미 확인된 조합입니다! (성공한 레시피)";
-      }
+    if (recipeType === 'fail') {
+      msgBox.className = "result-msg msg-fail";
+      msgBox.innerHTML = "❌ 이미 확인된 조합입니다! (실패한 레시피)";
       msgBox.style.display = 'block';
-    } else {
+    } 
+    else if (recipeType === 'perfect') {
+      msgBox.className = "result-msg msg-success";
+      msgBox.innerHTML = "🎉 이미 확인된 조합입니다! (완벽한 요리)";
+      msgBox.style.display = 'block';
+    } 
+    else if (recipeType === 'normal') {
+      msgBox.className = "result-msg msg-normal";
+      msgBox.innerHTML = "⚠️ 이미 확인된 조합입니다!<br>(평범한 요리입니다. 재료 수량을 바꿔서 시도해주세요)";
+      msgBox.style.display = 'block';
+    } 
+    else {
       msgBox.style.display = 'none';
-      
       const counts = {};
       selectedList.forEach(name => counts[name] = (counts[name] || 0) + 1);
       currentComboDisplayStr = Object.entries(counts)
@@ -367,21 +385,30 @@
     }
   }
 
-  function handleResult(isSuccess) {
-    const comboKey = [...selectedList].sort().join('_');
+  function closeConfirmModal() {
+    document.getElementById('modalConfirm').style.display = 'none';
+  }
+
+  function handleResult(resultType) { // 'perfect', 'normal', 'fail'
+    const comboKey = [...selectedList].sort().join(',');
     document.getElementById('modalConfirm').style.display = 'none';
 
-    recipesRef.child(comboKey).set({
-      displayStr: currentComboDisplayStr,
-      status: isSuccess ? 'success' : 'fail',
-      timestamp: Date.now()
+    const safeKey = comboKey.replace(/[\.\#\$\/\[\]]/g, "");
+
+    database.ref('recipes/' + safeKey).set({
+      key: comboKey,
+      type: resultType,
+      createdAt: Date.now()
     });
 
-    if (isSuccess) {
+    if (resultType === 'perfect') {
       document.getElementById('successRecipeText').innerText = `[ ${currentComboDisplayStr} ]`;
       document.getElementById('modalSuccess').style.display = 'flex';
+    } else if (resultType === 'normal') {
+      alert("평범한 요리로 등록되어 공유되었습니다.");
+      clearSelected();
     } else {
-      alert("실패 조합으로 등록되어 다른 길드원들에게도 공유됩니다.");
+      alert("실패 조합으로 등록되어 공유되었습니다.");
       clearSelected();
     }
   }
