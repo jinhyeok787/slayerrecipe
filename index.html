@@ -11,7 +11,7 @@
 
   /* 재료 그리드 */
   .grid-header { font-size: 14px; font-weight: bold; margin-bottom: 10px; text-align: center; color: #f1c40f; display: flex; justify-content: space-between; align-items: center; }
-  .ing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 15px; }
+  .ing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 15px; min-height: 100px; }
   
   .ing-card {
     background: #111;
@@ -77,7 +77,7 @@
   .btn-copy { background: #3498db; color: #fff; width: 100%; margin-top: 8px; padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
 </style>
 
-<!-- Firebase SDK 불러오기 -->
+<!-- Firebase SDK (v9 compat) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
@@ -139,6 +139,7 @@
     appId: "1:812845546552:web:4947d04ff78531cc89bacd",
     measurementId: "G-K4YL4CD2WX"
   };
+
   firebase.initializeApp(firebaseConfig);
   const database = firebase.database();
 
@@ -173,7 +174,7 @@
   let successCombinations = new Set();
   let currentComboDisplayStr = "";
 
-  // Firebase 실시간 데이터 구독 (누군가 데이터를 추가하면 실시간 자동 동기화)
+  // Firebase 데이터 수신 동기화
   database.ref('recipes').on('value', (snapshot) => {
     const data = snapshot.val();
     failedCombinations.clear();
@@ -187,6 +188,7 @@
     }
   });
 
+  // 화면 그리드 생성
   const gridEl = document.getElementById('ingGrid');
   ingredients.forEach((item, index) => {
     if(!item.name) {
@@ -201,7 +203,7 @@
     
     card.innerHTML = `
       <div class="count-badge" id="badge-${index}">0</div>
-      <img src="${item.img}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/50/222/fff?text=${item.name}'">
+      <img src="${item.img}" alt="${item.name}" onerror="this.src='https://placehold.co/50/222/fff?text=${encodeURIComponent(item.name)}'">
       <div class="name">${item.name}</div>
     `;
     gridEl.appendChild(card);
@@ -295,7 +297,8 @@
     const comboKey = [...selectedList].sort().join(',');
     document.getElementById('modalConfirm').style.display = 'none';
 
-    // Firebase 경로 금지문자(. # $ [ ])만 안전하게 제거하고, 쉼표(,)는 그대로 유지합니다.
+    // Firebase 경로에는 점(.), 샵(#), 달러($), 슬래시(/), 대괄호만 금지문자입니다.
+    // 쉼표(,)는 그대로 유지하여 데이터베이스 키와 정상 매칭시킵니다.
     const safeKey = comboKey.replace(/[\.\#\$\/\[\]]/g, "");
 
     database.ref('recipes/' + safeKey).set({
@@ -303,15 +306,6 @@
       type: isSuccess ? 'success' : 'fail',
       createdAt: Date.now()
     });
-
-    if (isSuccess) {
-      document.getElementById('successRecipeText').innerText = `[ ${currentComboDisplayStr} ]`;
-      document.getElementById('modalSuccess').style.display = 'flex';
-    } else {
-      alert("실패 조합으로 등록되어 공유되었습니다.");
-      clearSelected();
-    }
-  }
 
     if (isSuccess) {
       document.getElementById('successRecipeText').innerText = `[ ${currentComboDisplayStr} ]`;
